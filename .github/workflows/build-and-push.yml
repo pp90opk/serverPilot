@@ -22,8 +22,11 @@ jobs:
           bun install
           bun build --compile --minify-whitespace --minify-syntax ./src/app.ts --outfile serverPilot
 
-      - name: Release
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/')
         with:
           files: serverPilot
+          tag_name: ${{ github.sha }}
+          release_name: "Release for commit ${{ github.sha }}"
+          draft: false
+          prerelease: false
