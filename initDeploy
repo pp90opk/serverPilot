@@ -1,0 +1,40 @@
+#!/bin/bash
+
+if [ -z "$1" ]; then
+  echo "Usage: $0 <branch-name>"
+  exit 1
+fi
+BRANCH_NAME=$1
+REPO_URL="git@github.com:pp90opk/Deployments.git"
+DEST_DIR="/home/Lucrative/$BRANCH_NAME"
+if [ -d "$DEST_DIR" ]; then
+  echo "Directory $DEST_DIR already exists. Removing it..."
+  rm -rf "$DEST_DIR"
+fi
+echo "Cloning branch '$BRANCH_NAME'  into $DEST_DIR..."
+git clone --branch "$BRANCH_NAME" "$REPO_URL" "$DEST_DIR"
+
+echo "Clone complete."
+
+
+PASSPHRASE_FILE="/home/Lucrative/ccp"
+
+
+if [ ! -f "$PASSPHRASE_FILE" ]; then
+  echo "Error: Passphrase file $PASSPHRASE_FILE does not exist."
+  exit 1
+fi
+
+find "$DEST_DIR" -type f -name "*.enc" | while read -r ENC_FILE; do
+  
+  ORIGINAL_FILE="${ENC_FILE%.enc}"
+
+  
+  gpg --decrypt --batch --passphrase-file "$PASSPHRASE_FILE" --output "$ORIGINAL_FILE" "$ENC_FILE"
+
+  rm "$ENC_FILE"
+
+  echo "Decrypted: $ENC_FILE -> $ORIGINAL_FILE"
+done
+
+echo "Decryption complete."

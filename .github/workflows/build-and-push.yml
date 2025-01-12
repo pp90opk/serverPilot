@@ -1,0 +1,53 @@
+name: Build, Encrypt, and Deploy TypeScript
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v3
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: compile
+        run: |
+          bun install
+          REPO_NAME=$(echo "${{ github.repository }}" | cut -d'/' -f2)
+          bun build  --env inline  --compile  --target=bun-linux-arm64   --minify-whitespace --minify-syntax  ./src/app.ts --outfile $REPO_NAME
+          rm -rf tsconfig.json src package.json .git .github .gitignore bun.lockb dist node_modules
+          tar -cvf files.tar  *
+          gpg --symmetric --cipher-algo AES256 --batch --passphrase "$GPG_PASS" --output files.tar.gpg files.tar
+          rm files.tar
+          mkdir /home/runner/work/tempFolder
+          mv files.tar.gpg /home/runner/work/tempFolder/
+        env:
+          GPG_PASS: ${{ secrets.GPG_PASS }}
+
+      - name: Set up Git
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+
+      - name: Push compiled files to Deployments
+        env:
+          DEPLOYMENTS_PAT: ${{ secrets.DEPLOYMENTS_PAT }}
+        run: |
+          REPO_NAME=$(echo "${{ github.repository }}" | cut -d'/' -f2)
+          cd /home/runner/work
+          git clone https://x-access-token:${{ secrets.DEPLOYMENTS_PAT }}@github.com/pp90opk/Deployments.git Deployments
+          cd Deployments
+          find . -type f -name "*.enc" -exec rm -f {} \;
+          rm -rf $(pwd)/*/
+          git fetch origin || echo "No remote branches to fetch, continuing..."
+          git checkout $REPO_NAME || git checkout -b $REPO_NAME
+          shopt -s dotglob
+          cp -r /home/runner/work/tempFolder/* /home/runner/work/Deployments/
+          shopt -u dotglob
+          git add .
+          git commit -m "Update Deployment from $REPO_NAME"
+          git push https://x-access-token:${{ secrets.DEPLOYMENTS_PAT }}@github.com/pp90opk/Deployments.git $REPO_NAME --set-upstream
