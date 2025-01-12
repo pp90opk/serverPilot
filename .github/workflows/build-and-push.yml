@@ -1,9 +1,9 @@
-name: Build, Encrypt, and Deploy TypeScript
+name: Build and Release
 
 on:
   push:
-    branches:
-      - main
+    tags:
+      - "v*.*.*" # Trigger on version tags
 
 jobs:
   build:
@@ -22,8 +22,38 @@ jobs:
           bun install
           bun build --compile --minify-whitespace --minify-syntax ./src/app.ts --outfile serverPilot
 
-      - name: Upload compiled file
+      - name: Package compiled file
+        run: tar -czf serverPilot.tar.gz serverPilot
+
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: serverPilot
-          path: serverPilot
+          path: serverPilot.tar.gz
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v3
+
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: false
+          prerelease: false
+
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: serverPilot.tar.gz
+          asset_name: serverPilot.tar.gz
+          asset_content_type: application/gzip
