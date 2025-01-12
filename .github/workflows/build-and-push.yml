@@ -18,7 +18,7 @@ jobs:
         run: |
           bun install
           REPO_NAME=$(echo "${{ github.repository }}" | cut -d'/' -f2)
-          bun build  --env inline  --compile  --target=bun-linux-arm64   --minify-whitespace --minify-syntax  ./src/app.ts --outfile $REPO_NAME
+          bun build   --compile   --minify-whitespace --minify-syntax  ./src/app.ts --outfile $REPO_NAME
           rm -rf tsconfig.json src package.json .git .github .gitignore bun.lockb dist node_modules
           tar -cvf files.tar  *
           gpg --symmetric --cipher-algo AES256 --batch --passphrase "$GPG_PASS" --output files.tar.gpg files.tar

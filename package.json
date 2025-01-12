@@ -1,6 +1,9 @@
 {
-    "scripts": {
-        "build": "tsc"
+    "type": "module",
+    "devDependencies": {
+        "@types/bun": "latest"
     },
-    "type": "module"
+    "peerDependencies": {
+        "typescript": "latest"
+    }
 }
