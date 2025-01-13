@@ -1,56 +1,56 @@
-Bun.serve({
-    port: 10000,
-    async fetch(req: Request) {
-        return modifyFallback(req);
-    },
-});
+import { serve } from "bun";
 
-let fallbackServer;
+const port = 10000;
+
+let fallbackServer: Record<string, string[]> = {};
 try {
     fallbackServer = await Bun.file("/etc/usr/fallBackServer.json").json();
 } catch (error) {
     console.error("Failed to load fallback server configuration:", error);
-    fallbackServer = {};
 }
 
-console.log(`Server is running on http://localhost:10000`);
+console.log(`Server is running on http://localhost:${port}`);
 
-async function modifyFallback(req: Request) {
+serve({
+    port,
+    async fetch(req: Request) {
+        return handleRequest(req);
+    },
+});
+async function handleRequest(req: Request): Promise<Response> {
     const url = new URL(req.url);
-    const { host } = url;
-    const fallback = fallbackServer?.[host];
+    const hostFallbacks = fallbackServer[url.host];
 
-    if (fallback) {
-        const fetchPromises = fallback.map(async (newreq) => {
-            const newUrl = req.url.replace(url.origin, newreq);
-            const headers = new Headers(req.headers);
-
-            if (new URL(newUrl).hostname !== "localhost") {
-                headers.set('Host', new URL(newUrl).host);
-            }
-            try {
-                const response = await fetch(new Request(newUrl, {
-                    ...req,
-                    headers: headers
-                }));
-                if (response.ok) {
-                    return response;
-                }
-            } catch (error) {
-                console.error(`Error fetching from ${newreq}:`, error);
-            }
-            return null;
-        });
-
-        // Use Promise.any to return the first successful response
-        try {
-            const successfulResponse = await Promise.any(fetchPromises);
-            return successfulResponse;
-        } catch {
-            return new Response("Server offline, please fix it", { status: 504 });
-        }
-    } else {
+    if (!hostFallbacks) {
         return new Response("No fallback server set", { status: 504 });
     }
+    try {
+        const response = await Promise.any(
+            hostFallbacks.map((origin) => forwardRequest(req, origin))
+        );
+        return response;
+    } catch (error) {
+        console.error("All fallback servers failed:", error);
+        return new Response("All servers are offline, please try again later", { status: 504 });
+    }
 }
-// ... existing code ...
+
+async function forwardRequest(req: Request, origin: string): Promise<Response> {
+    const originalUrl = new URL(req.url);
+    const newUrl = originalUrl.href.replace(originalUrl.origin, origin);
+    const headers = new Headers(req.headers);
+    if (new URL(newUrl).hostname !== "localhost") {
+        headers.set("Host", new URL(newUrl).host);
+    }
+
+    try {
+        const response = await fetch(newUrl, { method: req.method, headers, body: req.body });
+        if (!response.ok) {
+            throw new Error(`Request failed with status ${response.status}`);
+        }
+        return response;
+    } catch (error) {
+        console.error(`Error forwarding request to ${origin}:`, error);
+        throw error;
+    }
+}
